@@ -8,19 +8,19 @@
 
 ArcClear is a netting interface with an Arc-native approval-based USDC settlement contract for Arc. It makes the funding reduction visible before participants approve or deposit funds.
 
-## Demo
+## Live settlement
 
-Northstar owes Orbit Labs 100 USDC, Orbit Labs owes Studio Three 90 USDC, and Studio Three owes Northstar 80 USDC. The gross obligations total 270 USDC. Net settlement requires Northstar to fund 20 USDC; Orbit Labs and Studio Three receive 10 USDC each. Funding is reduced by 92.59% against total invoice amounts, excluding gas.
+ArcClear now runs **Live on Arc only**. Start with an empty draft, assign participant wallets, and add agreed obligations. The testnet workflow can deploy the current contract through your browser wallet and prepare a small real-transaction test plan. Each participant signs their own approval; net payers fund their exact native-USDC balance before settlement.
 
-This is a funding comparison, not profit, debt forgiveness, or a guaranteed reduction versus every possible sequential payment order. Creation, approvals, deposits, and settlement each require transactions. The graph shows logical net routes; the contract pools net deposits and pays net receivers.
+For example, obligations of 0.10, 0.09, and 0.08 USDC form a three-party cycle totaling 0.27 USDC. Only 0.02 USDC of net funding is needed; the two receivers get 0.01 USDC each. Gas is separate. This is a funding comparison, not profit or debt forgiveness. The graph shows logical routes; the contract pools deposits and pays receivers atomically.
 
 ## Features
 
 - Editable obligations and 2–10 participants; up to 64 obligations per room.
 - Integer micro-USDC arithmetic with six decimal places.
 - Original and optimized payment network visualizations.
-- Explicit demo approval and settlement flow; no fake transaction hashes.
-- Device-local drafts and receipts; JSON plan export.
+- Wallet-signed approvals, funding, and settlement; no simulation mode.
+- PostgreSQL workspaces protected by wallet sign-in; device-local receipts and JSON plan export.
 - Ethereum-compatible wallet connection, Arc chain switching, and transaction simulation.
 - Shared onchain rooms with immutable obligations and unanimous participant approval.
 - Exact native-USDC deposits with no token allowance, atomic payouts, participant cancellation, and deposit recovery.
@@ -33,45 +33,59 @@ This is a funding comparison, not profit, debt forgiveness, or a guaranteed redu
 - [Previous winner research](docs/WINNER_RESEARCH.md): observed integration patterns
 - [Submission draft](docs/SUBMISSION.md): project description and outstanding requirements
 - [Mainnet evidence checklist](docs/MAINNET_EVIDENCE.md): real deployment and verification record
-- [Two-minute demo](docs/DEMO_SCRIPT.md): recording outline
+- [Real workflow](docs/REAL_WORKFLOW.md): testnet transactions from the interface
+- [Database setup](docs/DATABASE.md): PostgreSQL configuration, authentication, and deployment
 
 **Positioning:** Arc-first native-USDC clearing, not a claim that netting is possible only on Arc. The first generic ERC-20 prototype was revised to remove token allowance funding and rely on Arc's native USDC for value transfer and gas. On a conventional EVM chain the same native-value flow would settle a different asset.
 
 ## Test the real workflow
 
-The site opens in Live on Arc mode. Its guided workflow lets you connect to Arc Testnet, open Circle’s faucet, deploy ArcClear directly with your browser wallet, prepare a 0.02 USDC net-funding plan, and create, approve, fund, and settle a shared room. No private key is entered into the site. See [the real-workflow guide](docs/REAL_WORKFLOW.md).
+The site always uses Live on Arc. Its guided workflow lets you connect to Arc Testnet, open Circle’s faucet, deploy ArcClear with your browser wallet, prepare a 0.02 USDC net-funding plan, and create, approve, fund, and settle a room. No private key is entered into the site. Approvals and funding refresh every five seconds.
 
-Approvals and funding refresh every five seconds. Use three different wallet accounts, each funded for gas; each signs its own approval. Real transaction hashes link to the explorer. Demo mode remains available separately.
+The Tools menu has no Arc settings entry. Network and contract configuration are available through **Contract setup** in the live workflow.
+
+## PostgreSQL storage
+
+The Node API stores each wallet's workspace: participants, obligations, selected network, deployed contract address, and current room reference. Wallet sign-in uses expiring single-use signature challenges and HttpOnly sessions. Save and Load are explicit, with revision checks to avoid overwrites. Onchain approvals, deposits, and settlement remain authoritative on Arc; receipts remain device-local.
+
+Copy `config.env.example` to `.env.local` and privately set `DATABASE_URL`. The API creates an additive `arcclear` schema on startup. Credentials never enter the browser bundle or GitHub. See [database configuration](docs/DATABASE.md).
 
 ## Current status
 
-The interface opens with the live setup checklist; Demo mode is also available. Solidity contracts are compiled and tested on a local EVM; Arc RPC validation remains pending in this environment. **No Arc mainnet or testnet deployment is included or claimed.** Live mode needs a deployed ArcClear contract and funded participant wallets. A demo-only web deployment does not meet the Arc Microgrants mainnet requirement.
+Build, calculator, wallet-provider deployment, local-EVM settlement, and SQL-emulated API checks pass. **No public Arc deployment or settlement is claimed.** Real testing needs funded wallets and wallet confirmations.
 
-The contract is an unaudited prototype. The UI never stores keys or signs without a wallet prompt. Local workspace data is not an account system or private backend. Live participants, obligations, amounts, and approvals are public onchain. Names and invoice descriptions are local display labels, not verified identities.
+The supplied Aiven connection could not be verified from this environment because hostname resolution failed. Database status remains unavailable until the server connects. Run `npm run db:migrate` from your machine to verify access. No remote database migration success is claimed.
+
+The contract is an unaudited prototype. The UI never stores keys or signs without a wallet prompt. Workspace sign-in proves control of a wallet, not legal identity. Live obligations, amounts, and approvals are public onchain; PostgreSQL drafts are offchain and private to their wallet workspace.
 
 ## Run locally
 
-Use Node.js 24+ and run these commands on your own computer:
+Use Node.js 24+:
 
 ```sh
 git clone https://github.com/Bonavia/ArcClear.git
 cd ArcClear
 npm install
+```
+
+Copy `config.env.example` to `.env.local`, add your private PostgreSQL URL, then run:
+
+```sh
 npm run dev
 ```
 
-Your default browser opens at **http://localhost:5173**. Keep the terminal running. The full React/TypeScript interface now runs with ordinary Vite; demo mode requires no ChatGPT account or hosted preview. See [local setup and troubleshooting](docs/LOCAL_SETUP.md).
+The API starts on port 8787 and the browser opens at **http://localhost:5173**. Keep the terminal running. See [local setup](docs/LOCAL_SETUP.md).
 
 ```sh
 npm run typecheck
 npm test
 npm run build
-npm run preview
+npm start
 ```
 
-The production build is a static `dist/` folder. Preview it at http://localhost:4173. The existing pnpm lockfile is also supported (`pnpm install --frozen-lockfile`, `pnpm dev`).
+Production serves the UI and API at http://localhost:8787. Host the Node server behind HTTPS with database secrets and APP_ORIGIN configured; static hosting alone does not provide PostgreSQL storage. The pnpm lockfile remains supported, and CI uses pnpm.
 
-Tests cover exact decimals, invalid inputs, 300 generated conservation scenarios, unanimous consent, funding preconditions, atomic rollback, replay prevention, cancellation, room isolation, expiry, exactly-once refunds, native precision, wrong funding values, reentrancy, and wrong-chain deployment. Ganache uses a JavaScript fallback if optional native binaries are unavailable.
+Tests cover exact decimals, 300 conservation scenarios, unanimous consent, native deposits and payouts, refund recovery, room isolation, atomic rollback, reentrancy, the small test plan, wallet authentication, nonce replay rejection, owner isolation, validation, and workspace conflicts. Database API tests use SQL emulation rather than the external Aiven instance.
 
 ## Deploy the contract
 
@@ -93,7 +107,7 @@ The script writes the address and transaction hash to `deployments/testnet.json`
 
 1. Open **Participants** and assign unique wallet addresses.
 2. Add the obligations participants agree to clear.
-3. Open **Arc settings**, choose the network, and enter the deployed contract address.
+3. Open **Contract setup**, choose the network, and enter the deployed contract address.
 4. Connect a participant wallet and create the room.
 5. Share the room link; each member loads and approves the exact plan using their own wallet.
 6. Net payers fund their net amount directly with native USDC; no token allowance is required. Reserve extra USDC for gas.
@@ -131,7 +145,7 @@ Native payouts may fail under Arc's protocol rules or if a recipient contract re
 
 ## Microgrants submission
 
-Complete a real mainnet deployment, demonstrate a small real settlement, make the repository public, and provide the live URL, contract address, transaction hash, and builder profile. Deploying the demo website does not automatically complete these requirements.
+Complete a real mainnet deployment, demonstrate a small real settlement, make the repository public, and provide the live URL, contract address, transaction hash, and builder profile. Deploying the website does not automatically complete these requirements.
 
 ## Structure
 
@@ -140,7 +154,8 @@ Complete a real mainnet deployment, demonstrate a small real settlement, make th
 - `components/`: network visualization
 - `lib/`: netting engine, Arc clients, generated ABI
 - `contracts/`: Solidity, test-only recipient, artifacts
-- `scripts/`: contract compilation and deployment; legacy platform helpers
+- `server/` and `db/`: Node API, wallet authentication, PostgreSQL schema
+- `scripts/`: local development, migration, contract compilation and deployment; legacy platform helpers
 - `tests/`: calculator and local-EVM tests
 
 MIT licensed. Built for Bonavia.
