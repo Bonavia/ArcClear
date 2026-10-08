@@ -1,0 +1,174 @@
+{
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "target",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "approve",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "attemptReentrancy",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "target",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "cancel",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "target",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "reject",
+          "type": "bool"
+        },
+        {
+          "internalType": "bool",
+          "name": "reenter",
+          "type": "bool"
+        }
+      ],
+      "name": "configure",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "target",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "fund",
+      "outputs": [],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "reentrySucceeded",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "target",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        }
+      ],
+      "name": "refund",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "rejectPayment",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "room",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "roomId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "stateMutability": "payable",
+      "type": "receive"
+    }
+  ],
+  "bytecode": "0x608080604052346015576104dc908161001b8239f35b600080fdfe6080806040526004361015610122575b50361561001b57600080fd5b60005460ff81166100dd5760ff8160081c1661003357005b600080916001548260405160208101926211bf0560eb1b8452602482015260248152610060604482610484565b519260181c6001600160a01b03165af13d156100d8573d67ffffffffffffffff81116100c2576040519061009e90601f01601f191660200182610484565b600060203d92013e5b62ff000060005491151560101b169062ff0000191617600055005b634e487b7160e01b600052604160045260246000fd5b6100a7565b60405162461bcd60e51b815260206004820152601a60248201527f526563697069656e742072656a6563746564207061796d656e740000000000006044820152606490fd5b600090813560e01c908163095ea7b3146103ef57508063176b97ef146103705780633433523e14610345578063410085df146102ee57806359703b2e146102c95780637b1837de146102765780639436bc1f1461025457806398590ef9146101de578063bc8cf3dd146101b95763f954d0d90361000f57346101b657806003193601126101b6576020600154604051908152f35b80fd5b50346101b657806003193601126101b65760ff6020915460081c166040519015158152f35b50346101b65760403660031901126101b657806001600160a01b03610201610469565b16803b15610251578180916024604051809481936340e58ee560e01b8352833560048401525af18015610246576102355750f35b8161023f91610484565b6101b65780f35b6040513d84823e3d90fd5b50fd5b50346101b657806003193601126101b65760ff60209154166040519015158152f35b5060403660031901126101b657806001600160a01b03610294610469565b16803b1561025157816024916040519283809263ca1d209d60e01b82528235600483015234905af18015610246576102355750f35b50346101b657806003193601126101b65760ff6020915460101c166040519015158152f35b50346101b65760403660031901126101b657806001600160a01b03610311610469565b16803b156102515781809160246040518094819363278ecde160e01b8352833560048401525af18015610246576102355750f35b50346101b657806003193601126101b6575460405160189190911c6001600160a01b03168152602090f35b50346101b65760803660031901126101b65761038a610469565b6044358015158091036103eb576064358015158091036103e757835460243560015560ff9290921662ff0001600160b81b031990921660189390931b6301000000600160b81b0316929092171760089190911b61ff001617815580f35b8380fd5b8280fd5b90503461046557604036600319011261046557816001600160a01b03610413610469565b16803b1561046557826044818480946369b518c360e11b83526024356004840152600160248401525af180156104585761044a5780f35b61045391610484565b388180f35b50604051903d90823e3d90fd5b5080fd5b600435906001600160a01b038216820361047f57565b600080fd5b90601f8019910116810190811067ffffffffffffffff8211176100c25760405256fea264697066735822122049fd2865b1511144f81b643afb1cac846a093c41ddcb00b5a50305e3b516046164736f6c63430008250033"
+}
