@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://github.com/Bonavia.png" width="128" alt="Bonavia" style="border-radius: 24px;">
+</p>
+
 # ArcClear
 
 **Clear shared obligations with less USDC funding.**
