@@ -37,9 +37,15 @@ This is a funding comparison, not profit, debt forgiveness, or a guaranteed redu
 
 **Positioning:** Arc-first native-USDC clearing, not a claim that netting is possible only on Arc. The first generic ERC-20 prototype was revised to remove token allowance funding and rely on Arc's native USDC for value transfer and gas. On a conventional EVM chain the same native-value flow would settle a different asset.
 
+## Test the real workflow
+
+The site opens in Live on Arc mode. Its guided workflow lets you connect to Arc Testnet, open Circle’s faucet, deploy ArcClear directly with your browser wallet, prepare a 0.02 USDC net-funding plan, and create, approve, fund, and settle a shared room. No private key is entered into the site. See [the real-workflow guide](docs/REAL_WORKFLOW.md).
+
+Approvals and funding refresh every five seconds. Use three different wallet accounts, each funded for gas; each signs its own approval. Real transaction hashes link to the explorer. Demo mode remains available separately.
+
 ## Current status
 
-The interface runs immediately in demo mode. Solidity contracts are compiled and tested on a local EVM; Arc RPC validation remains pending. **No Arc mainnet or testnet deployment is included or claimed.** Live mode needs a deployed ArcClear contract and funded participant wallets. A demo-only web deployment does not meet the Arc Microgrants mainnet requirement.
+The interface opens with the live setup checklist; Demo mode is also available. Solidity contracts are compiled and tested on a local EVM; Arc RPC validation remains pending in this environment. **No Arc mainnet or testnet deployment is included or claimed.** Live mode needs a deployed ArcClear contract and funded participant wallets. A demo-only web deployment does not meet the Arc Microgrants mainnet requirement.
 
 The contract is an unaudited prototype. The UI never stores keys or signs without a wallet prompt. Local workspace data is not an account system or private backend. Live participants, obligations, amounts, and approvals are public onchain. Names and invoice descriptions are local display labels, not verified identities.
 
