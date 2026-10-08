@@ -23,3 +23,9 @@
 .workflow-note { padding: 0 24px 18px; margin: 8px 0 0; }
 @media (max-width: 1050px) { .workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .workflow-steps { grid-template-columns: 1fr; } .workflow-panel .panel-heading { flex-wrap: wrap; gap: 12px; } }
+
+.storage-panel { display:flex; align-items:center; justify-content:space-between; padding:18px 24px; margin-bottom:20px; gap:16px; }
+.storage-panel strong { font-size:14px; }
+.storage-panel p { font-size:12px; color:#64748b; margin-top:4px; }
+.storage-panel > div:last-child { display:flex; gap:10px; }
+@media (max-width:600px) { .storage-panel { align-items:flex-start; flex-direction:column; } }
