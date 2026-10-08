@@ -45,17 +45,25 @@ The contract is an unaudited prototype. The UI never stores keys or signs withou
 
 ## Run locally
 
-Use Node.js 24+ and pnpm:
+Use Node.js 24+ and run these commands on your own computer:
 
 ```sh
-pnpm install
-pnpm dev
-pnpm typecheck
-pnpm test
-pnpm build
+git clone https://github.com/Bonavia/ArcClear.git
+cd ArcClear
+npm install
+npm run dev
 ```
 
-React, TypeScript, Vinext/Next-compatible routes, viem, and Cloudflare Workers. Ordinary environments use the normal dev server. Managed Sites environments use the supervised preview command.
+Your default browser opens at **http://localhost:5173**. Keep the terminal running. The full React/TypeScript interface now runs with ordinary Vite; demo mode requires no ChatGPT account or hosted preview. See [local setup and troubleshooting](docs/LOCAL_SETUP.md).
+
+```sh
+npm run typecheck
+npm test
+npm run build
+npm run preview
+```
+
+The production build is a static `dist/` folder. Preview it at http://localhost:4173. The existing pnpm lockfile is also supported (`pnpm install --frozen-lockfile`, `pnpm dev`).
 
 Tests cover exact decimals, invalid inputs, 300 generated conservation scenarios, unanimous consent, funding preconditions, atomic rollback, replay prevention, cancellation, room isolation, expiry, exactly-once refunds, native precision, wrong funding values, reentrancy, and wrong-chain deployment. Ganache uses a JavaScript fallback if optional native binaries are unavailable.
 
@@ -121,11 +129,12 @@ Complete a real mainnet deployment, demonstrate a small real settlement, make th
 
 ## Structure
 
-- `app/`: interface, styling, metadata
+- `src/main.tsx` and `index.html`: local browser entry point
+- `app/`: interface and styling
 - `components/`: network visualization
 - `lib/`: netting engine, Arc clients, generated ABI
 - `contracts/`: Solidity, test-only recipient, artifacts
-- `scripts/`: compilation, deployment, web build support
+- `scripts/`: contract compilation and deployment; legacy platform helpers
 - `tests/`: calculator and local-EVM tests
 
 MIT licensed. Built for Bonavia.
