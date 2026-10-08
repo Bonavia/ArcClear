@@ -68,6 +68,16 @@ await call(b,'fund',[7n],20n*unit);await call(outsider,'settle',[7n]);assert.equ
 // One micro-USDC transfers exactly 10^12 native base units; no rounding.
 await call(a,'createRoom',[addresses,[0],[1],[1n],deadline]);await approve(8n);await call(a,'fund',[8n],scale);
 const bBeforeTiny=await balance(addresses[1]);await call(outsider,'settle',[8n]);assert.equal(await balance(addresses[1]),bBeforeTiny+scale);
+// The guided testnet plan uses 0.10 / 0.09 / 0.08 USDC obligations.
+await call(a,'createRoom',[addresses,[0,1,2],[1,2,0],[100_000n,90_000n,80_000n],deadline]);
+assert.deepEqual((await read('getRoom',[9n]))[1],[-20_000n,10_000n,10_000n]);
+await approve(9n);await call(a,'fund',[9n],20_000n*scale);
+const bBeforeGuided=await balance(addresses[1]), cBeforeGuided=await balance(addresses[2]);
+await call(a,'settle',[9n]);
+assert.equal(await balance(addresses[1]),bBeforeGuided+10_000n*scale);
+assert.equal(await balance(addresses[2]),cBeforeGuided+10_000n*scale);
+assert.equal((await read('getRoom',[9n]))[5],true);
+assert.equal(await balance(address),0n);
 // Deployment is rejected on a different chain ID (safety guard, not chain authentication).
 const otherProvider=ganache.provider({logging:{quiet:true},chain:{chainId:1337}});
 const otherAccount=(await otherProvider.request({method:'eth_accounts',params:[]}))[0];
