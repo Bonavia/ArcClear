@@ -29,3 +29,15 @@
 .storage-panel p { font-size:12px; color:#64748b; margin-top:4px; }
 .storage-panel > div:last-child { display:flex; gap:10px; }
 @media (max-width:600px) { .storage-panel { align-items:flex-start; flex-direction:column; } }
+
+.guide-link { display:flex; gap:6px; align-items:center; background:none; border:0; color:#4361ee; font-size:13px; white-space:nowrap; }
+.next-step-panel { display:flex; align-items:center; gap:16px; padding:20px 24px; background:#f0f4ff; border:1px solid #dce5ff; border-radius:10px; margin-bottom:20px; }
+.next-step-number { width:36px; height:36px; display:grid; place-items:center; flex-shrink:0; background:#4361ee; color:white; border-radius:50%; font-weight:700; }
+.next-step-panel > div { flex:1; }.next-step-panel .eyebrow { display:block; font-size:10px; margin-bottom:6px; }.next-step-panel h2 { font-size:17px; margin:0 0 6px; }.next-step-panel p { font-size:13px; color:#5f7191; }
+.help-tip-button { display:inline-flex; vertical-align:middle; align-items:center; justify-content:center; border:0; padding:4px; margin-left:3px; color:#7d8dad; background:transparent; cursor:help; flex-shrink:0; }
+.control-tooltip { position:fixed; z-index:100; max-width:min(320px,calc(100vw - 24px)); padding:12px 14px; font-size:12px; line-height:1.65; color:white; background:#1b2942; border-radius:8px; box-shadow:0 8px 28px #14223925; pointer-events:none; }
+.action-explanation { color:#64748b; font-size:12px; line-height:1.7; margin-bottom:12px; }
+.guide-checklist { padding-left:22px; margin:20px 0; }.guide-checklist li { padding:9px 0 9px 5px; color:#43516b; font-size:14px; }.guide-checklist p { font-size:13px; color:#64748b; margin-top:5px; }
+.usage-guide details { border:1px solid #e5eaf3; border-radius:8px; margin:10px 0; padding:12px 14px; }.usage-guide summary { font-size:14px; color:#43516b; font-weight:600; cursor:pointer; }.usage-guide details p,.usage-guide details li { color:#64748b; font-size:13px; line-height:1.8; margin-top:10px; }.usage-guide details ul { padding-left:18px; }
+.transaction-link { flex-wrap:wrap; }.transaction-link strong { font-size:12px; }
+@media(max-width:700px) { .next-step-panel { flex-wrap:wrap; padding:16px; }.next-step-panel > div { min-width:calc(100% - 55px); }.next-step-panel > button { margin-left:52px; }.guide-link { font-size:0; }.guide-link svg { width:19px;height:19px; } }
