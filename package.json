@@ -14,12 +14,13 @@
     "db:generate": "drizzle-kit generate",
     "contracts:compile": "node scripts/compile-contracts.mjs",
     "contracts:test": "node scripts/compile-contracts.mjs && node tests/contract.test.mjs",
-    "test": "node tests/netting.test.mjs && node tests/database.test.mjs && node scripts/compile-contracts.mjs && node tests/contract.test.mjs",
+    "test": "node tests/netting.test.mjs && node tests/workflow.test.mjs && node tests/database.test.mjs && node scripts/compile-contracts.mjs && node tests/contract.test.mjs",
     "contracts:deploy": "node scripts/deploy-contract.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "db:migrate": "node scripts/db-migrate.mjs",
-    "test:database": "node tests/database.test.mjs"
+    "test:database": "node tests/database.test.mjs",
+    "test:workflow": "node tests/workflow.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
