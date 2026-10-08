@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://github.com/Bonavia/ArcClear/blob/main/public/ArcClear.png" width="128" alt="Bonavia" style="border-radius: 24px;">
+  <img src="https://github.com/Bonavia/ArcClear/blob/main/public/ArcClear.png" width="100%" alt="Bonavia" style="border-radius: 24px;">
 </p>
 
 # ArcClear
