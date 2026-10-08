@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { Check, CheckCircle2, ChevronDown, CircleHelp, Copy, Download, ExternalLink, FileCheck2, FileText, GitBranch, Layers3, Loader2, Plus, RotateCcw, Settings2, ShieldCheck, Sparkles, Trash2, Users, Wallet, X, Zap } from 'lucide-react';
-import { decodeEventLog, isAddress, type Abi, type Address, type EIP1193Provider, type Hash } from 'viem';
+import { decodeEventLog, formatUnits, isAddress, type Abi, type Address, type EIP1193Provider, type Hash } from 'viem';
 import { NetworkGraph } from '@/components/network-graph';
 import { COLORS, DEMO_OBLIGATIONS, DEMO_PARTICIPANTS, formatUSDC, netObligations, parseUSDC, type Obligation, type Participant } from '@/lib/netting';
 import { getClients, networks, reader, roomAbi, shortAddress, type Network } from '@/lib/chain';
@@ -17,7 +17,7 @@ export default function Home() {
   const [participants, setParticipants] = useState<Participant[]>(DEMO_PARTICIPANTS);
   const [obligations, setObligations] = useState<Obligation[]>(DEMO_OBLIGATIONS);
   const [optimized, setOptimized] = useState(false);
-  const [mode, setMode] = useState<'demo' | 'live'>('demo');
+  const [mode, setMode] = useState<'demo' | 'live'>('live');
   const [view, setView] = useState<'room' | 'receipts'>('room');
   const [modal, setModal] = useState<'obligation' | 'participants' | 'settings' | 'help' | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -34,6 +34,8 @@ export default function Home() {
   const [notice, setNotice] = useState('');
   const [tx, setTx] = useState<Hash | null>(null);
   const [deadlineDays, setDeadlineDays] = useState(7);
+  const [walletBalance, setWalletBalance] = useState<bigint | null>(null);
+  const [syncError, setSyncError] = useState('');
   const result = useMemo(() => netObligations(participants, obligations), [participants, obligations]);
   const locked = demoSettled || !!chainRoom || !!busy;
   const myIndex = participants.findIndex(p => p.address.toLowerCase() === account?.toLowerCase());
@@ -52,6 +54,7 @@ export default function Home() {
         if (Array.isArray(data.participants) && Array.isArray(data.obligations)) { netObligations(data.participants, data.obligations); setParticipants(data.participants); setObligations(data.obligations); }
         if (Array.isArray(data.receipts)) setReceipts(data.receipts);
         if (isAddress(data.contract ?? '')) setContract(data.contract);
+        if (data.mode === 'live' || data.mode === 'demo') setMode(data.mode);
         if (data.network === 'mainnet' || data.network === 'testnet') setNetwork(data.network);
         if (data.mode === 'live' && /^\d+$/.test(data.roomId ?? '')) { setRoomInput(data.roomId); setMode('live'); setModal('settings'); }
       }
@@ -61,7 +64,8 @@ export default function Home() {
       }
     } catch { /* Invalid local data is ignored. */ }
     const p = provider();
-    const changed = (...args: unknown[]) => setAccount((args[0] as Address[])?.[0]);
+    const changed = (...args: unknown[]) => { setAccount((args[0] as Address[])?.[0]); setWalletBalance(null); };
+    p?.request({ method: 'eth_accounts' }).then(accounts => setAccount((accounts as Address[])[0])).catch(() => {});
     p?.on?.('accountsChanged', changed);
     return () => p?.removeListener?.('accountsChanged', changed);
   }, []);
@@ -98,6 +102,67 @@ export default function Home() {
     return () => { document.removeEventListener('keydown', keydown); previous?.focus(); };
   }, [modal, busy]);
 
+  useEffect(() => {
+    if (!account || mode !== 'live') { setWalletBalance(null); return; }
+    let active = true;
+    const update = () => reader(network).getBalance({ address: account }).then(balance => { if (active) setWalletBalance(balance); }).catch(() => { if (active) setWalletBalance(null); });
+    update(); const timer = setInterval(update, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [account, network, mode]);
+
+  useEffect(() => {
+    if (mode !== 'live' || !chainRoom || busy) return;
+    let active = true, refreshing = false;
+    const timer = setInterval(async () => {
+      if (refreshing || !active) return;
+      refreshing = true;
+      try { await refreshRoom(chainRoom.id, () => active); if (active) setSyncError(''); }
+      catch { if (active) setSyncError('Live updates unavailable. Use Refresh to retry.'); }
+      finally { refreshing = false; }
+    }, 5000);
+    return () => { active = false; clearInterval(timer); };
+  }, [mode, chainRoom?.id, contract, network, busy]);
+
+  function prepareTestPlan() {
+    if (locked) return;
+    setNetwork('testnet'); setMode('live'); setParticipants(DEMO_PARTICIPANTS.map(p => ({ ...p, address: '' })));
+    setObligations(DEMO_OBLIGATIONS.map((o, i) => ({ ...o, amount: ['0.10', '0.09', '0.08'][i] })));
+    resetApprovals(); setOptimized(true); setModal('participants');
+    setNotice('Assign three different test wallets. Net payer funds 0.02 USDC; receivers get 0.01 each. All wallets need gas.');
+  }
+
+  async function switchWalletNetwork() {
+    const p = provider(); if (!p) throw new Error('Install an Ethereum-compatible browser wallet.');
+    const chain = networks[network];
+    const current = await p.request({ method: 'eth_chainId' });
+    if (Number(current) === chain.id) return;
+    try { await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x' + chain.id.toString(16) }] }); }
+    catch (e) {
+      if ((e as { code?: number }).code !== 4902) throw e;
+      await p.request({ method: 'wallet_addEthereumChain', params: [{ chainId: '0x' + chain.id.toString(16), chainName: chain.name, nativeCurrency: chain.nativeCurrency, rpcUrls: [...chain.rpcUrls.default.http], blockExplorerUrls: [chain.blockExplorers.default.url] }] });
+      await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x' + chain.id.toString(16) }] });
+    }
+  }
+
+  async function deployTestContract() {
+    if (network !== 'testnet' || chainRoom) throw new Error('Browser deployment is available only on Arc Testnet before a room is loaded.');
+    const sender = await connect(); await switchWalletNetwork();
+    const artifact = (await import('../contracts/artifacts/ArcClear.json')).default;
+    const { publicClient, walletClient } = getClients(provider()!, 'testnet');
+    const fees = await publicClient.estimateFeesPerGas();
+    const maxFeePerGas = fees.maxFeePerGas < BigInt(20_000_000_000) ? BigInt(20_000_000_000) : fees.maxFeePerGas;
+    const bytecode = artifact.bytecode as Hash;
+    const gas = await publicClient.estimateGas({ account: sender, data: bytecode }) * BigInt(120) / BigInt(100);
+    if (await publicClient.getBalance({ address: sender }) < gas * maxFeePerGas) throw new Error('Get test USDC from Circle’s faucet before deploying.');
+    const hash = await walletClient.deployContract({ abi: artifact.abi, bytecode, account: sender, args: [], gas, type: 'eip1559', maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
+    setTx(hash);
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    if (receipt.status !== 'success' || !receipt.contractAddress) throw new Error('Contract deployment failed.');
+    const version = await publicClient.readContract({ address: receipt.contractAddress, abi: roomAbi, functionName: 'VERSION' });
+    if (version !== BigInt(2)) throw new Error('The deployed contract failed its version check.');
+    setContract(receipt.contractAddress); setNotice('ArcClear deployed on Arc Testnet. Assign participant wallets, then create your room.');
+  }
+
   function resetApprovals() { setApproved([]); setOptimized(false); setDemoSettled(false); setError(''); }
   function switchMode(value: 'demo' | 'live') { if (busy) return; setMode(value); setError(''); setTx(null); setNotice(value === 'demo' ? 'Demo mode uses simulated approvals. No funds move.' : 'Live mode requires an ArcClear contract deployed on your selected network.'); }
   function resetRoom() { if (busy) return; setParticipants(DEMO_PARTICIPANTS); setObligations(DEMO_OBLIGATIONS); setChainRoom(null); setRoomInput(''); resetApprovals(); setTx(null); setView('room'); }
@@ -120,7 +185,7 @@ export default function Home() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = 'arcclear-settlement-plan.json'; link.click(); URL.revokeObjectURL(url);
   }
-  async function refreshRoom(id = chainRoom?.id) {
+  async function refreshRoom(id = chainRoom?.id, apply = () => true) {
     if (!id || !isAddress(contract)) throw new Error('Enter a valid contract address and room ID.');
     const client = reader(network);
     const version = await client.readContract({address: contract, abi: roomAbi, functionName: 'VERSION'});
@@ -135,6 +200,7 @@ export default function Home() {
     const chainRows = amounts.map((amount, i) => ({ id: String(i), from: String(from[i]), to: String(to[i]), amount: (amount / BigInt(1_000_000)).toString() + '.' + (amount % BigInt(1_000_000)).toString().padStart(6, '0'), reference: `Obligation ${i + 1}` }));
     const computed = netObligations(list, chainRows);
     if (net.some((b, i) => b !== computed.balances.get(String(i)))) throw new Error('Contract balances do not match its obligations.');
+    if (!apply()) return;
     setParticipants(current => list.map(p => ({ ...p, name: current.find(old => old.address.toLowerCase() === p.address.toLowerCase())?.name ?? p.name })));
     setObligations(chainRows); setChainRoom({ id, approvals, funded: paid, deadline: Number(deadline), settled: complete, cancelled, hash: planHash });
     setOptimized(true); setRoomInput(id.toString());
@@ -150,16 +216,10 @@ export default function Home() {
     if (!isAddress(contract)) throw new Error('Configure your deployed ArcClear contract first.');
     const accounts = await p.request({ method: 'eth_requestAccounts' }) as Address[];
     const sender = accounts[0]; if (!sender) throw new Error('Connect a wallet.'); setAccount(sender);
+    if (account && sender.toLowerCase() !== account.toLowerCase()) throw new Error('Wallet account changed. Review the connected participant and retry.');
     const currentVersion = await reader(network).readContract({address: contract as Address, abi: roomAbi, functionName: 'VERSION'});
     if (currentVersion !== BigInt(2)) throw new Error('Use the current ArcClear v2 native-USDC deployment.');
-    const chain = networks[network]; const current = await p.request({ method: 'eth_chainId' });
-    if (Number(current) !== chain.id) {
-      try { await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x' + chain.id.toString(16) }] }); }
-      catch (e) { if ((e as { code?: number }).code !== 4902) throw e;
-        await p.request({ method: 'wallet_addEthereumChain', params: [{ chainId: '0x' + chain.id.toString(16), chainName: chain.name, nativeCurrency: chain.nativeCurrency, rpcUrls: [...chain.rpcUrls.default.http], blockExplorerUrls: [chain.blockExplorers.default.url] }] });
-        await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x' + chain.id.toString(16) }] });
-      }
-    }
+    await switchWalletNetwork();
     const { publicClient, walletClient } = getClients(p, network);
     const fees = await publicClient.estimateFeesPerGas();
     const maxFeePerGas = fees.maxFeePerGas < BigInt(20_000_000_000) ? BigInt(20_000_000_000) : fees.maxFeePerGas;
@@ -239,6 +299,16 @@ export default function Home() {
           <div className="page-heading"><div><div className="eyebrow">MULTILATERAL CLEARING</div><h1>Less money moving.<br className="mobile-break"/> More business settled.</h1><p>Clear shared obligations with a single net settlement.</p></div><button className="button secondary" onClick={resetRoom} disabled={!!busy}><Plus size={17}/>New room</button></div>
           <div className="room-toolbar"><div className="room-title"><span className="room-icon"><GitBranch size={19}/></span><div><strong>{chainRoom ? `Settlement room #${chainRoom.id}` : 'October settlement'}</strong><span>{participants.length} participants <i>·</i> {obligations.length} obligations</span></div><span className={`status-badge ${settled ? 'success' : ''}`}>{settled ? 'Settled' : chainRoom?.cancelled ? 'Cancelled' : expired ? 'Expired' : chainRoom ? 'Onchain room' : 'Draft'}</span></div><div className="mode-switch" aria-label="Settlement mode"><button className={mode === 'demo' ? 'selected' : ''} onClick={() => switchMode('demo')}>Demo</button><button className={mode === 'live' ? 'selected' : ''} onClick={() => switchMode('live')}>Live on Arc</button></div></div>
           <div className="mobile-tools"><button onClick={()=>{setModal('participants');setError('');}}><Users size={15}/>Participants</button><button onClick={()=>{setModal('settings');setError('');}}><Settings2 size={15}/>Arc settings</button><button onClick={()=>setView('receipts')}><FileCheck2 size={15}/>Receipts</button></div>
+          {mode === 'live' && <section className="panel workflow-panel" aria-label="Real settlement workflow">
+            <div className="panel-heading"><div><h2>{network === 'testnet' ? 'Test the real workflow' : 'Live settlement workflow'}</h2><p>{network === 'testnet' ? 'Real onchain transactions using test USDC. Every action is signed in your wallet.' : 'Transactions use real USDC. Review every wallet confirmation.'}</p></div>{network === 'testnet' && !locked && <button className="button secondary compact" onClick={prepareTestPlan}>Use 0.02 USDC test plan</button>}</div>
+            <ol className="workflow-steps">
+              <li className={account ? 'complete' : ''}><strong>1. Connect & fund wallets</strong><span>{account ? shortAddress(account) : 'Connect a browser wallet'}{walletBalance !== null && ` · ${Number(formatUnits(walletBalance,18)).toFixed(4)} USDC`}</span><div><button disabled={!!busy} onClick={()=>action('Connect to Arc',async()=>{await connect();await switchWalletNetwork();})}>Connect to Arc</button>{network==='testnet' && <a href="https://faucet.circle.com" target="_blank" rel="noreferrer">Get test USDC ↗</a>}</div></li>
+              <li className={isAddress(contract) ? 'complete' : ''}><strong>2. Set up contract</strong><span>{isAddress(contract) ? shortAddress(contract) : 'Deploy once or enter an existing address'}</span><div>{network==='testnet' && !chainRoom && !isAddress(contract) && <button disabled={!!busy} onClick={()=>action('Deploy testnet contract',deployTestContract)}>Deploy with wallet</button>}<button disabled={!!busy} onClick={()=>setModal('settings')}>Arc settings</button></div></li>
+              <li className={chainRoom ? 'complete' : ''}><strong>3. Create & approve room</strong><span>{chainRoom ? `${approvalCount}/${participants.length} approvals · room #${chainRoom.id}` : 'Assign unique participant wallets, then create'}</span><div><button disabled={!!busy} onClick={()=>setModal('participants')}>Participant wallets</button>{chainRoom && <button disabled={!!busy} onClick={()=>action('Copy room link',copyLink)}>Share room</button>}</div></li>
+              <li className={settled ? 'complete' : ''}><strong>4. Fund & settle</strong><span>{settled ? 'Settlement confirmed on Arc' : chainRoom && funded ? 'Net funding complete' : 'Payers fund only their net balance, plus gas'}</span><div><span>Use the settlement action below</span></div></li>
+            </ol>
+            <p className="workflow-note">Use three different wallet accounts for the test plan. Each account needs USDC for gas and signs its own approval. {chainRoom && 'Room state refreshes every 5 seconds.'} {syncError}</p>
+          </section>}
           <section className="metrics" aria-label="Settlement metrics">
             <div className="metric"><span>Invoice value<FileText size={17}/></span><strong>{dollar(result.gross)}<small>USDC</small></strong><p>Across {obligations.length} agreed obligations</p></div>
             <div className="metric"><span>USDC required<Wallet size={17}/></span><strong>{dollar(result.required)}<small>USDC</small></strong><p>Native USDC, excluding gas</p></div>
@@ -277,8 +347,8 @@ export default function Home() {
     {modal && <div className="modal-backdrop" onClick={e => {if(e.target===e.currentTarget && !busy){setModal(null);setError('');}}}><section className={`modal ${modal === 'participants' ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><h2 id="modal-title">{modal === 'obligation' ? 'Add an obligation' : modal === 'participants' ? 'Room participants' : modal === 'settings' ? 'Arc settings' : 'A smarter way to settle'}</h2><button aria-label="Close dialog" disabled={!!busy} onClick={() => {setModal(null);setError('');}}><X size={20}/></button></div>
       {error && <div className="error" role="alert">{error}</div>}
       {modal === 'obligation' && <form onSubmit={e=>{e.preventDefault();addObligation();}}><div className="form-pair"><label>From<select value={form.from} onChange={e=>setForm({...form,from:e.target.value})}>{participants.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label>To<select value={form.to} onChange={e=>setForm({...form,to:e.target.value})}>{participants.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div><label>Amount in USDC<input autoFocus required inputMode="decimal" placeholder="0.00" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})}/></label><label>Reference<input required maxLength={80} placeholder="e.g. Development sprint" value={form.reference} onChange={e=>setForm({...form,reference:e.target.value})}/></label><p className="form-note">Participants approve the complete plan before live funding.</p><button className="button primary full" type="submit"><Plus size={17}/>Add obligation</button></form>}
-      {modal === 'participants' && <><p className="modal-description">Name participants and assign wallets for live settlement.</p>{locked && <div className="info-box">This plan is locked. Start a new room to edit participants.</div>}<div className="participant-editor">{participants.map((p,i)=><div className="participant-edit-row" key={p.id}><span className="avatar" style={{background:p.color+'16',color:p.color}}>{p.name[0]||'?'}</span><div><label><span className="sr-only">Participant {i+1} name</span><input disabled={locked} maxLength={24} value={p.name} onChange={e=>{setParticipants(participants.map(x=>x.id===p.id?{...x,name:e.target.value||'Participant'}:x));setApproved([]);}}/></label><label><span className="sr-only">Participant {i+1} wallet</span><input disabled={locked} className="address-input" placeholder="Wallet address · 0x…" value={p.address} onChange={e=>{setParticipants(participants.map(x=>x.id===p.id?{...x,address:e.target.value}:x));setApproved([]);}}/></label></div><button className="icon-button" aria-label={`Remove ${p.name}`} disabled={locked||participants.length<=2||obligations.some(o=>o.from===p.id||o.to===p.id)} onClick={()=>{setParticipants(participants.filter(x=>x.id!==p.id));resetApprovals();}}><Trash2 size={16}/></button></div>)}</div><div className="modal-footer"><button className="button secondary" disabled={locked||participants.length>=10} onClick={()=>{setParticipants([...participants,{id:crypto.randomUUID(),name:`Participant ${participants.length+1}`,address:'',color:COLORS[participants.length]}]);resetApprovals();}}><Plus size={16}/>Add participant</button><button className="button primary" onClick={()=>{setModal(null);setError('');}}>Done</button></div></>}
-      {modal === 'settings' && <><p className="modal-description">Use a deployed ArcClear contract to create or load shared rooms.</p><label>Network<select value={network} disabled={!!chainRoom||!!busy} onChange={e=>setNetwork(e.target.value as Network)}><option value="testnet">Arc Testnet · test USDC</option><option value="mainnet">Arc Mainnet · real USDC</option></select></label><label>ArcClear contract address<input placeholder="0x…" value={contract} disabled={!!chainRoom||!!busy} onChange={e=>setContract(e.target.value.trim())}/></label>{!chainRoom && <label>Room deadline<select value={deadlineDays} onChange={e=>setDeadlineDays(Number(e.target.value))}>{[1,3,7,14,30].map(d=><option key={d} value={d}>{d} {d===1?'day':'days'}</option>)}</select></label>}<div className="info-box"><ShieldCheck size={17}/><span>{network==='mainnet'?'Mainnet uses real USDC. Reserve extra USDC for gas.':'Testnet is for testing. Deploy the included contract before using live rooms.'}</span></div><label>Load an existing room<input inputMode="numeric" placeholder="Room ID, e.g. 1" value={roomInput} onChange={e=>setRoomInput(e.target.value.replace(/\D/g,''))}/></label><button className="button secondary full" disabled={!!busy||!roomInput||!isAddress(contract)} onClick={()=>action('Load room',async()=>{await refreshRoom(BigInt(roomInput));setMode('live');setModal(null);})}>{busy?<Loader2 className="spin" size={16}/>:<Download size={16}/>}Load room from Arc</button><div className="modal-footer"><a href="https://github.com/circlefin/skills/tree/master/plugins/circle/skills/use-arc" target="_blank" rel="noreferrer" className="text-link">Arc network reference<ExternalLink size={13}/></a><button className="button primary" disabled={!!busy} onClick={()=>{if(contract&&!isAddress(contract)){setError('Enter a valid contract address.');return;}setModal(null);setMode('live');setError('');}}>Save settings</button></div></>}
+      {modal === 'participants' && <><p className="modal-description">Name participants and assign wallets for live settlement.</p>{locked && <div className="info-box">This plan is locked. Start a new room to edit participants.</div>}<div className="participant-editor">{participants.map((p,i)=><div className="participant-edit-row" key={p.id}><span className="avatar" style={{background:p.color+'16',color:p.color}}>{p.name[0]||'?'}</span><div><label><span className="sr-only">Participant {i+1} name</span><input disabled={locked} maxLength={24} value={p.name} onChange={e=>{setParticipants(participants.map(x=>x.id===p.id?{...x,name:e.target.value||'Participant'}:x));setApproved([]);}}/></label><label><span className="sr-only">Participant {i+1} wallet</span><input disabled={locked} className="address-input" placeholder="Wallet address · 0x…" value={p.address} onChange={e=>{setParticipants(participants.map(x=>x.id===p.id?{...x,address:e.target.value}:x));setApproved([]);}}/></label></div><button className="participant-wallet-shortcut" disabled={locked||!!busy} onClick={()=>action('Assign connected wallet',async()=>{const address=await connect();setParticipants(current=>current.map(x=>x.id===p.id?{...x,address}:x));setApproved([]);})}>Use wallet</button><button className="icon-button" aria-label={`Remove ${p.name}`} disabled={locked||participants.length<=2||obligations.some(o=>o.from===p.id||o.to===p.id)} onClick={()=>{setParticipants(participants.filter(x=>x.id!==p.id));resetApprovals();}}><Trash2 size={16}/></button></div>)}</div><div className="modal-footer"><button className="button secondary" disabled={locked||participants.length>=10} onClick={()=>{setParticipants([...participants,{id:crypto.randomUUID(),name:`Participant ${participants.length+1}`,address:'',color:COLORS[participants.length]}]);resetApprovals();}}><Plus size={16}/>Add participant</button><button className="button primary" onClick={()=>{setModal(null);setError('');}}>Done</button></div></>}
+      {modal === 'settings' && <><p className="modal-description">Use a deployed ArcClear contract to create or load shared rooms.</p><label>Network<select value={network} disabled={!!chainRoom||!!busy} onChange={e=>setNetwork(e.target.value as Network)}><option value="testnet">Arc Testnet · test USDC</option><option value="mainnet">Arc Mainnet · real USDC</option></select></label><label>ArcClear contract address<input placeholder="0x…" value={contract} disabled={!!chainRoom||!!busy} onChange={e=>setContract(e.target.value.trim())}/></label>{!chainRoom && <label>Room deadline<select value={deadlineDays} onChange={e=>setDeadlineDays(Number(e.target.value))}>{[1,3,7,14,30].map(d=><option key={d} value={d}>{d} {d===1?'day':'days'}</option>)}</select></label>}<div className="info-box"><ShieldCheck size={17}/><span>{network==='mainnet'?'Mainnet uses real USDC. Reserve extra USDC for gas.':'Testnet uses test USDC. Deploy here with your wallet, or enter an existing v2 contract.'}</span></div>{network === 'testnet' && !chainRoom && <button className="button secondary full" disabled={!!busy} onClick={()=>action('Deploy testnet contract',deployTestContract)}><Plus size={16}/>{busy || 'Deploy new testnet contract with wallet'}</button>}<label>Load an existing room<input inputMode="numeric" placeholder="Room ID, e.g. 1" value={roomInput} onChange={e=>setRoomInput(e.target.value.replace(/\D/g,''))}/></label><button className="button secondary full" disabled={!!busy||!roomInput||!isAddress(contract)} onClick={()=>action('Load room',async()=>{await refreshRoom(BigInt(roomInput));setMode('live');setModal(null);})}>{busy?<Loader2 className="spin" size={16}/>:<Download size={16}/>}Load room from Arc</button><div className="modal-footer"><a href="https://github.com/circlefin/skills/tree/master/plugins/circle/skills/use-arc" target="_blank" rel="noreferrer" className="text-link">Arc network reference<ExternalLink size={13}/></a><button className="button primary" disabled={!!busy} onClick={()=>{if(contract&&!isAddress(contract)){setError('Enter a valid contract address.');return;}setModal(null);setMode('live');setError('');}}>Save settings</button></div></>}
       {modal === 'help' && <><p className="modal-description">Offset incoming and outgoing obligations. Fund only the difference.</p><div className="help-example"><span>Northstar → Orbit Labs <strong>100 USDC</strong></span><span>Orbit Labs → Studio Three <strong>90 USDC</strong></span><span>Studio Three → Northstar <strong>80 USDC</strong></span><div><Sparkles size={20}/><strong>270 USDC of obligations.<br/>20 USDC of net funding.</strong></div></div><ol className="help-steps"><li><strong>Agree on the plan.</strong> Every member approves the immutable obligations.</li><li><strong>Fund the difference.</strong> Net payers send their exact net balance as native USDC. No ERC-20 allowance is needed.</li><li><strong>Settle together.</strong> All net payouts execute in one transaction, or the settlement reverts.</li></ol><p className="form-note">Funding reduction compares net deposits with total invoices. It is not profit or debt forgiveness. Gas and transaction count are separate. Cancellation or expiry lets depositors reclaim funds. Onchain records alone do not establish legal discharge of invoices.</p><button className="button primary full" onClick={()=>setModal(null)}>Got it</button></>}
     </section></div>}
     {!!busy && <div className="busy-status" role="status"><Loader2 size={17} className="spin"/>{busy}…</div>}
