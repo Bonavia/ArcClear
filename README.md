@@ -29,6 +29,8 @@ For example, obligations of 0.10, 0.09, and 0.08 USDC form a three-party cycle t
 
 ## Documentation
 
+- [User guide](docs/USER_GUIDE.md): next-step guidance, all actions, tooltips, and recovery
+
 - [Why Arc and Circle](docs/ARC_CIRCLE_FIT.md): technical fit and honest limits
 - [Previous winner research](docs/WINNER_RESEARCH.md): observed integration patterns
 - [Submission draft](docs/SUBMISSION.md): project description and outstanding requirements
@@ -41,6 +43,8 @@ For example, obligations of 0.10, 0.09, and 0.08 USDC form a three-party cycle t
 ## Test the real workflow
 
 The site always uses Live on Arc. Its guided workflow lets you connect to Arc Testnet, open Circle’s faucet, deploy ArcClear with your browser wallet, prepare a 0.02 USDC net-funding plan, and create, approve, fund, and settle a room. No private key is entered into the site. Approvals and funding refresh every five seconds.
+
+The interface includes a state-aware next-step panel, tooltips for controls and fields, and a complete in-app User guide. Submitted transactions are distinguished from confirmed and reverted transactions.
 
 The Tools menu has no Arc settings entry. Network and contract configuration are available through **Contract setup** in the live workflow.
 
