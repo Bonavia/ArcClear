@@ -4,10 +4,12 @@ import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { isAddress, verifyMessage } from 'viem';
-import { createDatabase, migrate } from './database.mjs';
+import { loadServerEnvironment } from './environment.mjs';
+import { createDatabase, migrate, databaseIssue } from './database.mjs';
 import { validateWorkspace } from './validation.mjs';
 export function createApiServer({ pool, port = 8787, production = false, origin = `http://localhost:${production ? port : 5173}`, initiallyReady = true }) {
 let ready = initiallyReady;
+let issue = pool ? {code:'CONNECTING',message:'Connecting to PostgreSQL.'} : {code:'NOT_CONFIGURED',message:'Set DATABASE_URL in .env or .env.local, then restart the API.'};
 const allowed = new Set([origin, ...(!production ? ['http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173'] : [])]);
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
@@ -34,9 +36,9 @@ async function api(req, res, pathname) {
   limit(req);
   if (req.method !== 'GET' && !allowed.has(req.headers.origin)) throw fail(403, 'Request origin is not allowed.');
   if (pathname === '/api/health' && req.method === 'GET') {
-    if (!pool || !ready) return json(res, 503, { database: pool ? 'unavailable' : 'not configured' });
+    if (!pool || !ready) return json(res, 503, { database: pool ? 'unavailable' : 'not configured', ...issue });
     try { await pool.query('SELECT 1'); return json(res, 200, { database: 'connected' }); }
-    catch { return json(res, 503, { database: 'unavailable' }); }
+    catch (error) { return json(res, 503, { database: 'unavailable', ...databaseIssue(error) }); }
   }
   if (!ready) throw fail(503, 'Database unavailable. Check server configuration.');
   if (pathname === '/api/auth/challenge' && req.method === 'POST') {
@@ -99,20 +101,20 @@ const server = http.createServer(async(req,res)=>{
     if(req.method==='HEAD') return res.end();fs.createReadStream(file).pipe(res);
   } catch(e) { if(!res.headersSent) json(res,e.status??503,{ error:e.status?e.message:'Database request failed. Retry or check server configuration.' }); else res.end(); }
 });
-return { server, setReady: value => { ready = value; } };
+return { server, setReady: (value, error) => { ready = value; if (error) issue = databaseIssue(error); } };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
-  if (fs.existsSync('.env.local')) process.loadEnvFile('.env.local');
+  loadServerEnvironment();
   const pool = createDatabase();
   const port = Number(process.env.API_PORT || process.env.PORT || 8787);
   const production = process.argv.includes('--production');
   const { server, setReady } = createApiServer({ pool, port, production, origin: process.env.APP_ORIGIN || `http://localhost:${production ? port : 5173}`, initiallyReady: false });
   server.listen(port,process.env.API_HOST||'127.0.0.1',()=>console.log(`ArcClear ${production?'site':'API'}: http://localhost:${port}`));
   async function initialize() {
-    if (!pool) { console.log('PostgreSQL not configured. Set DATABASE_URL in .env.local.'); return; }
+    if (!pool) { console.log('PostgreSQL not configured. Set DATABASE_URL in .env or .env.local.'); return; }
     try { await migrate(pool); setReady(true); console.log('PostgreSQL connected; ArcClear schema ready.'); }
-    catch(e) { console.error(`PostgreSQL unavailable (${e.code??'connection error'}). Retrying in 15 seconds.`); const timer=setTimeout(initialize,15000);timer.unref(); }
+    catch(e) { setReady(false,e); const problem=databaseIssue(e); console.error(`PostgreSQL unavailable (${problem.code}): ${problem.message} Retrying in 15 seconds.`); const timer=setTimeout(initialize,15000);timer.unref(); }
   }
   initialize();
   for(const event of ['SIGINT','SIGTERM']) process.on(event,()=>server.close(async()=>{await pool?.end();process.exit();}));
