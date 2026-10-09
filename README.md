@@ -91,6 +91,10 @@ Production serves the UI and API at http://localhost:8787. Host the Node server 
 
 Tests cover exact decimals, 300 conservation scenarios, unanimous consent, native deposits and payouts, refund recovery, room isolation, atomic rollback, reentrancy, the small test plan, wallet authentication, nonce replay rejection, owner isolation, validation, and workspace conflicts. Database API tests use SQL emulation rather than the external Aiven instance.
 
+## Deploy to Vercel
+
+Import this repository with the Vite preset. The committed configuration serves the frontend and PostgreSQL API together. Set the Arc variables and private DATABASE_URL in Vercel before deploying. See [Vercel setup](docs/VERCEL.md) for settings and verification.
+
 ## Deploy the contract
 
 ```sh
