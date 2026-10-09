@@ -7,14 +7,20 @@ import { isAddress, verifyMessage } from 'viem';
 import { loadServerEnvironment } from './environment.mjs';
 import { createDatabase, migrate, databaseIssue } from './database.mjs';
 import { validateWorkspace } from './validation.mjs';
-export function createApiServer({ pool, port = 8787, production = false, origin = `http://localhost:${production ? port : 5173}`, initiallyReady = true }) {
+export function createApiServer({ pool, port = 8787, production = false, origin = `http://localhost:${production ? port : 5173}`, initiallyReady = true, allowedOrigins = [] }) {
 let ready = initiallyReady;
 let issue = pool ? {code:'CONNECTING',message:'Connecting to PostgreSQL.'} : {code:'NOT_CONFIGURED',message:'Set DATABASE_URL in .env or .env.local, then restart the API.'};
-const allowed = new Set([origin, ...(!production ? ['http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173'] : [])]);
+const allowed = new Set([origin, ...allowedOrigins, ...(!production ? ['http://127.0.0.1:5173', 'http://localhost:4173', 'http://127.0.0.1:4173'] : [])]);
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, message) => Object.assign(new Error(message), { status });
 const json = (res, status, data) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(JSON.stringify(data)); };
 async function body(req) {
+  // Vercel may parse JSON before invoking the Node handler.
+  if (req.body !== undefined) {
+    const raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    if (Buffer.byteLength(raw) > 65536) throw fail(413, 'Workspace is too large.');
+    try { return JSON.parse(raw); } catch { throw fail(400, 'Invalid JSON.'); }
+  }
   const chunks = []; let bytes = 0; for await (const chunk of req) { bytes += chunk.length; if (bytes > 65536) throw fail(413, 'Workspace is too large.'); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw fail(400, 'Invalid JSON.'); }
 }
@@ -88,7 +94,7 @@ async function api(req, res, pathname) {
   throw fail(404,'API route not found.');
 }
 const types = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.svg':'image/svg+xml', '.png':'image/png', '.json':'application/json', '.woff2':'font/woff2' };
-const server = http.createServer(async(req,res)=>{
+const handler = async(req,res)=>{
   try {
     const pathname = new URL(req.url,'http://localhost').pathname;
     if (pathname.startsWith('/api/')) return await api(req,res,pathname);
@@ -100,8 +106,9 @@ const server = http.createServer(async(req,res)=>{
     res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream','X-Content-Type-Options':'nosniff'});
     if(req.method==='HEAD') return res.end();fs.createReadStream(file).pipe(res);
   } catch(e) { if(!res.headersSent) json(res,e.status??503,{ error:e.status?e.message:'Database request failed. Retry or check server configuration.' }); else res.end(); }
-});
-return { server, setReady: (value, error) => { ready = value; if (error) issue = databaseIssue(error); } };
+};
+const server = http.createServer(handler);
+return { server, handler, setReady: (value, error) => { ready = value; if (error) issue = databaseIssue(error); } };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
