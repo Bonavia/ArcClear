@@ -22,12 +22,12 @@ export default function Home() {
   const [obligations, setObligations] = useState<Obligation[]>([]);
   const [optimized, setOptimized] = useState(false);
   const [view, setView] = useState<'room' | 'receipts'>('room');
-  const [modal, setModal] = useState<'obligation' | 'participants' | 'settings' | 'help' | null>(null);
+  const [modal, setModal] = useState<'obligation' | 'participants' | 'room' | 'help' | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [account, setAccount] = useState<Address>();
-  const [contract, setContract] = useState(appDefaults.contract);
-  const [network, setNetwork] = useState<Network>(appDefaults.network);
+  const contract = appDefaults.contract;
+  const network = appDefaults.network;
   const [chainRoom, setChainRoom] = useState<ChainRoom | null>(null);
   const [roomInput, setRoomInput] = useState('');
   const [busy, setBusy] = useState('');
@@ -41,6 +41,7 @@ export default function Home() {
   const [syncError, setSyncError] = useState('');
   const [databaseStatus, setDatabaseStatus] = useState('Checking storage…');
   const [databaseReady, setDatabaseReady] = useState(false);
+  const [databaseDetail, setDatabaseDetail] = useState('');
   const [sessionAddress, setSessionAddress] = useState<string | null>(null);
   const [dbRevision, setDbRevision] = useState<number | null>(null);
   const [savedAt, setSavedAt] = useState('');
@@ -63,13 +64,15 @@ export default function Home() {
       if (saved) { const data = JSON.parse(saved);
         if (data.mode !== 'demo' && Array.isArray(data.participants) && Array.isArray(data.obligations)) { netObligations(data.participants, data.obligations); setParticipants(data.participants); setObligations(data.obligations); }
         if (Array.isArray(data.receipts)) setReceipts(data.receipts.filter((r: Receipt & {demo?:boolean}) => !r.demo && r.tx));
-        // Existing rooms keep their own network/address; ordinary drafts use configured defaults.
-        if ((data.roomId || !appDefaults.contract) && isAddress(data.contract ?? '') && ['testnet','mainnet'].includes(data.network)) { setContract(data.contract); setNetwork(data.network); }
-        if (/^\d+$/.test(data.roomId ?? '')) { setRoomInput(data.roomId); setModal('settings'); }
+        if (/^[1-9]\d*$/.test(data.roomId ?? '')) {
+          if (data.network === network && data.contract?.toLowerCase() === contract.toLowerCase()) { setRoomInput(data.roomId); setModal('room'); }
+          else setError('The saved room belongs to a different deployment. Use the site configured for that room.');
+        }
       }
       const params = new URLSearchParams(window.location.search);
       if (isAddress(params.get('contract') ?? '') && /^\d+$/.test(params.get('room') ?? '') && ['mainnet', 'testnet'].includes(params.get('network') ?? '')) {
-        setContract(params.get('contract')!); setRoomInput(params.get('room')!); setNetwork(params.get('network') as Network); setModal('settings');
+        if (params.get('network') === network && params.get('contract')!.toLowerCase() === contract.toLowerCase()) { setRoomInput(params.get('room')!); setModal('room'); }
+        else setError('This shared room belongs to a different deployment. Use the site configured for that room.');
       }
     } catch { /* Invalid local data is ignored. */ }
     const p = provider();
@@ -134,7 +137,7 @@ export default function Home() {
 
   function prepareTestPlan() {
     if (locked) return;
-    setNetwork('testnet'); if (network !== 'testnet') setContract(appDefaults.network === 'testnet' ? appDefaults.contract : ''); setParticipants(INITIAL_PARTICIPANTS.map(p => ({ ...p, address: '' })));
+    setParticipants(INITIAL_PARTICIPANTS.map(p => ({ ...p, address: '' })));
     setObligations([0,1,2].map(i => ({id:String(i),from:INITIAL_PARTICIPANTS[i].id,to:INITIAL_PARTICIPANTS[(i+1)%3].id,amount:['0.10','0.09','0.08'][i],reference:`Test obligation ${i+1}`})));
     resetApprovals(); setOptimized(true); setModal('participants');
     setNotice('Assign three different test wallets. Net payer funds 0.02 USDC; receivers get 0.01 each. All wallets need gas.');
@@ -153,33 +156,13 @@ export default function Home() {
     }
   }
 
-  async function deployTestContract() {
-    if (network !== 'testnet' || chainRoom) throw new Error('Browser deployment is available only on Arc Testnet before a room is loaded.');
-    const sender = await connect(); await switchWalletNetwork();
-    const artifact = (await import('../contracts/artifacts/ArcClear.json')).default;
-    const { publicClient, walletClient } = getClients(provider()!, 'testnet');
-    const fees = await publicClient.estimateFeesPerGas();
-    const maxFeePerGas = fees.maxFeePerGas < BigInt(20_000_000_000) ? BigInt(20_000_000_000) : fees.maxFeePerGas;
-    const bytecode = artifact.bytecode as Hash;
-    const gas = await publicClient.estimateGas({ account: sender, data: bytecode }) * BigInt(120) / BigInt(100);
-    if (await publicClient.getBalance({ address: sender }) < gas * maxFeePerGas) throw new Error('Get test USDC from Circle’s faucet before deploying.');
-    const hash = await walletClient.deployContract({ abi: artifact.abi, bytecode, account: sender, args: [], gas, type: 'eip1559', maxFeePerGas, maxPriorityFeePerGas: fees.maxPriorityFeePerGas });
-    setTx(hash); setTxNetwork(network); setTxStatus('pending');
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    if (receipt.status !== 'success' || !receipt.contractAddress) { setTxStatus('reverted'); throw new Error('Contract deployment failed. Open the explorer for details.'); }
-    setTxStatus('confirmed');
-    const version = await publicClient.readContract({ address: receipt.contractAddress, abi: roomAbi, functionName: 'VERSION' });
-    if (version !== BigInt(2)) throw new Error('The deployed contract failed its version check.');
-    setContract(receipt.contractAddress); setNotice('ArcClear deployed on Arc Testnet. Assign participant wallets, then create your room.');
-  }
-
   useEffect(() => {
     let active = true;
     const check = async () => {
       try {
         const response = await fetch('/api/health'); const status = await response.json();
-        if (active) { setDatabaseReady(response.ok && status.database === 'connected'); setDatabaseStatus(response.ok ? 'PostgreSQL connected' : 'PostgreSQL unavailable'); }
-      } catch { if (active) { setDatabaseReady(false); setDatabaseStatus('PostgreSQL unavailable'); } }
+        if (active) { setDatabaseReady(response.ok && status.database === 'connected'); setDatabaseStatus(response.ok ? 'PostgreSQL connected' : 'PostgreSQL unavailable'); setDatabaseDetail(response.ok ? '' : `${status.code ?? 'DATABASE_UNAVAILABLE'}: ${status.message ?? 'Check the API database configuration.'}`); }
+      } catch { if (active) { setDatabaseReady(false); setDatabaseStatus('PostgreSQL unavailable'); setDatabaseDetail('API unreachable. Start the app with npm run dev, or npm start after building.'); } }
     };
     check(); const timer = setInterval(check, 15000);
     return () => { active = false; clearInterval(timer); };
@@ -216,14 +199,15 @@ export default function Home() {
     if (!workspace) { setDbRevision(0); setNotice('No saved workspace for this wallet yet.'); return; }
     const data = workspace.data;
     netObligations(data.participants, data.obligations);
-    setParticipants(data.participants); setObligations(data.obligations); setNetwork(data.network); setContract(data.contract);
+    if (data.roomId && (data.network !== network || data.contract?.toLowerCase() !== contract.toLowerCase())) throw new Error('The saved room belongs to a different deployment. Use the site configured for that room.');
+    setParticipants(data.participants); setObligations(data.obligations);
     setChainRoom(null); setRoomInput(data.roomId ?? ''); setOptimized(true); setDbRevision(Number(workspace.revision)); setSavedAt(new Date(workspace.updated_at).toLocaleString());
-    if (data.roomId) { setModal('settings'); setNotice('Workspace loaded. Load the saved room from Arc to verify its current state.'); }
+    if (data.roomId) { setModal('room'); setNotice('Workspace loaded. Load the saved room from Arc to verify its current state.'); }
     else setNotice('Draft loaded from PostgreSQL.');
   }
 
   function resetApprovals() { setOptimized(false); setError(''); }
-  function resetRoom() { if (busy) return; setParticipants(INITIAL_PARTICIPANTS); setObligations([]); setChainRoom(null); setRoomInput(''); setNetwork(appDefaults.network); setContract(appDefaults.contract); resetApprovals(); setTx(null); setTxStatus('none'); setView('room'); }
+  function resetRoom() { if (busy) return; setParticipants(INITIAL_PARTICIPANTS); setObligations([]); setChainRoom(null); setRoomInput(''); resetApprovals(); setTx(null); setTxStatus('none'); setView('room'); }
   function addObligation() {
     try {
       if (!form.reference.trim()) throw new Error('Add a short reference.');
@@ -323,7 +307,7 @@ export default function Home() {
     if (busy) return;
     switch (nextStep.id) {
       case 'connect': return action('Connect to Arc', async () => { await connect(); await switchWalletNetwork(); });
-      case 'contract': setError(''); setModal('settings'); return;
+      case 'contract': return;
       case 'participants': case 'member': setError(''); setModal('participants'); return;
       case 'obligation': setForm({from:participants[0].id,to:participants[1].id,amount:'',reference:''}); setError(''); setModal('obligation'); return;
       case 'create': return action('Create room', createLiveRoom);
@@ -358,12 +342,12 @@ export default function Home() {
           <div className="room-toolbar"><div className="room-title"><span className="room-icon"><GitBranch size={19}/></span><div><strong>{chainRoom ? `Settlement room #${chainRoom.id}` : 'New settlement draft'}</strong><span>{participants.length} participants <i>·</i> {obligations.length} obligations</span></div><span className={`status-badge ${settled ? 'success' : ''}`}>{settled ? 'Settled' : chainRoom?.cancelled ? 'Cancelled' : expired ? 'Expired' : chainRoom ? 'Onchain room' : 'Draft'}</span></div><span className="network-tag">Live on Arc</span></div>
           <div className="mobile-tools"><button onClick={()=>{setModal('participants');setError('');}}><Users size={15}/>Participants</button><button onClick={()=>setView('receipts')}><FileCheck2 size={15}/>Receipts</button></div>
           <section className="next-step-panel" aria-label="Next step"><span className="next-step-number">{nextStep.step}</span><div><span className="eyebrow">{busy ? 'ACTION IN PROGRESS' : 'YOUR NEXT STEP'}</span><h2>{busy || nextStep.title}</h2><p>{busy ? txStatus === 'pending' && /Create|Deploy|Approve|Fund|Settle|Refund|Cancel/.test(busy) ? 'Transaction submitted. Wait for confirmation or check its explorer link below.' : 'Check your wallet for a request. The site will update after the action completes.' : nextStep.body}</p></div><button className="button secondary compact" onClick={()=>setModal('help')}><CircleHelp size={16}/>User guide</button></section>
-          <section className="panel storage-panel" aria-label="Workspace storage"><div><strong>{databaseStatus}</strong><p>{savedAt ? `Last saved ${savedAt}` : databaseReady ? 'Save drafts and room references with wallet sign-in.' : 'Saving is unavailable. Your draft stays in this browser; live Arc transactions can still work.'}</p></div><div><button className="button secondary compact" disabled={!!busy||!databaseReady} onClick={()=>action('Load saved workspace',loadWorkspace)}>Load workspace</button><button className="button primary compact" disabled={!!busy||!databaseReady} onClick={()=>action('Save workspace',saveWorkspace)}>Save workspace</button></div></section>
+          <section className="panel storage-panel" aria-label="Workspace storage"><div><strong>{databaseStatus}</strong><p>{savedAt ? `Last saved ${savedAt}` : databaseReady ? 'Save drafts and room references with wallet sign-in.' : 'Saving is unavailable. Your draft stays in this browser; live Arc transactions can still work.'}</p>{databaseDetail && <p role="status">{databaseDetail}</p>}</div><div><button className="button secondary compact" disabled={!!busy||!databaseReady} onClick={()=>action('Load saved workspace',loadWorkspace)}>Load workspace</button><button className="button primary compact" disabled={!!busy||!databaseReady} onClick={()=>action('Save workspace',saveWorkspace)}>Save workspace</button></div></section>
           <section className="panel workflow-panel" aria-label="Real settlement workflow">
             <div className="panel-heading"><div><h2>{network === 'testnet' ? 'Test the real workflow' : 'Live settlement workflow'}</h2><p>{network === 'testnet' ? 'Real onchain transactions using test USDC. Every action is signed in your wallet.' : 'Transactions use real USDC. Review every wallet confirmation.'}</p></div>{network === 'testnet' && !locked && <button className="button secondary compact" onClick={prepareTestPlan}>Use 0.02 USDC test plan</button>}</div>
             <ol className="workflow-steps">
               <li className={account ? 'complete' : ''}><strong>1. Connect & fund wallets</strong><span>{account ? shortAddress(account) : 'Connect a browser wallet'}{walletBalance !== null && ` · ${Number(formatUnits(walletBalance,18)).toFixed(4)} USDC`}</span><div><button disabled={!!busy} onClick={()=>action('Connect to Arc',async()=>{await connect();await switchWalletNetwork();})}>Connect to Arc</button>{network==='testnet' && <a href="https://faucet.circle.com" target="_blank" rel="noreferrer">Get test USDC ↗</a>}</div></li>
-              <li className={isAddress(contract) ? 'complete' : ''}><strong>2. Set up contract</strong><span>{isAddress(contract) ? `${shortAddress(contract)} · address configured` : 'Deploy once or enter an existing address'}</span><div>{network==='testnet' && !chainRoom && !isAddress(contract) && <button disabled={!!busy} onClick={()=>action('Deploy testnet contract',deployTestContract)}>Deploy with wallet</button>}<button disabled={!!busy} onClick={()=>setModal('settings')}>Contract setup</button></div></li>
+              <li className={isAddress(contract) ? 'complete' : ''}><strong>2. Configured deployment</strong><span>{isAddress(contract) ? `${shortAddress(contract)} · ${networks[network].name}` : 'Deployment configuration required'}</span><div>{isAddress(contract) && <a href={`${networks[network].blockExplorers.default.url}/address/${contract}`} target="_blank" rel="noreferrer">View contract</a>}<button disabled={!!busy} onClick={()=>setModal('room')}>Room options</button></div></li>
               <li className={chainRoom ? 'complete' : ''}><strong>3. Create & approve room</strong><span>{chainRoom ? `${approvalCount}/${participants.length} approvals · room #${chainRoom.id}` : 'Assign unique participant wallets, then create'}</span><div><button disabled={!!busy} onClick={()=>setModal('participants')}>Participant wallets</button>{chainRoom && <button disabled={!!busy} onClick={()=>action('Copy room link',copyLink)}>Share room</button>}</div></li>
               <li className={settled ? 'complete' : ''}><strong>4. Fund & settle</strong><span>{settled ? 'Settlement confirmed on Arc' : chainRoom && funded ? 'Net funding complete' : 'Payers fund only their net balance, plus gas'}</span><div><span>Use the settlement action below</span></div></li>
             </ol>
@@ -402,11 +386,11 @@ export default function Home() {
         </>}
       </div>
     </main>
-    {modal && <div className="modal-backdrop" onClick={e => {if(e.target===e.currentTarget && !busy){setModal(null);setError('');}}}><section className={`modal ${modal === 'participants' || modal === 'help' ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><h2 id="modal-title">{modal === 'obligation' ? 'Add an obligation' : modal === 'participants' ? 'Room participants' : modal === 'settings' ? 'Contract setup' : 'ArcClear user guide'}</h2><button aria-label="Close dialog" disabled={!!busy} onClick={() => {setModal(null);setError('');}}><X size={20}/></button></div>
+    {modal && <div className="modal-backdrop" onClick={e => {if(e.target===e.currentTarget && !busy){setModal(null);setError('');}}}><section className={`modal ${modal === 'participants' || modal === 'help' ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-header"><h2 id="modal-title">{modal === 'obligation' ? 'Add an obligation' : modal === 'participants' ? 'Room participants' : modal === 'room' ? 'Room options' : 'ArcClear user guide'}</h2><button aria-label="Close dialog" disabled={!!busy} onClick={() => {setModal(null);setError('');}}><X size={20}/></button></div>
       {error && <div className="error" role="alert">{error}</div>}
       {modal === 'obligation' && <form onSubmit={e=>{e.preventDefault();addObligation();}}><div className="form-pair"><label htmlFor="obligation-from">From<HelpTip text="The participant who owes this debt. Must differ from To."/><select id="obligation-from" value={form.from} onChange={e=>setForm({...form,from:e.target.value})}>{participants.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label htmlFor="obligation-to">To<HelpTip text="The participant who receives this debt. Must differ from From."/><select id="obligation-to" value={form.to} onChange={e=>setForm({...form,to:e.target.value})}>{participants.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label></div><label htmlFor="obligation-amount">Amount in USDC<HelpTip text="Enter a positive amount with up to six decimals. Other obligations may offset this amount."/><input id="obligation-amount" autoFocus required inputMode="decimal" placeholder="0.00" value={form.amount} onChange={e=>setForm({...form,amount:e.target.value})}/></label><label htmlFor="obligation-reference">Reference<HelpTip text="A short local label for the obligation, up to 80 characters."/><input id="obligation-reference" required maxLength={80} placeholder="e.g. Development sprint" value={form.reference} onChange={e=>setForm({...form,reference:e.target.value})}/></label><p className="form-note">Participants approve the complete plan before live funding.</p><button className="button primary full" type="submit"><Plus size={17}/>Add obligation</button></form>}
       {modal === 'participants' && <><p className="modal-description">Name participants and assign wallets for live settlement.</p>{locked && <div className="info-box">This plan is locked. Start a new room to edit participants.</div>}<div className="participant-editor">{participants.map((p,i)=><div className="participant-edit-row" key={p.id}><span className="avatar" style={{background:p.color+'16',color:p.color}}>{p.name[0]||'?'}</span><div><label><span className="sr-only">Participant {i+1} name</span><input disabled={locked} maxLength={24} value={p.name} onChange={e=>{setParticipants(participants.map(x=>x.id===p.id?{...x,name:e.target.value||'Participant'}:x));}}/></label><label><span className="sr-only">Participant {i+1} wallet</span><input disabled={locked} className="address-input" placeholder="Wallet address · 0x…" value={p.address} onChange={e=>{setParticipants(participants.map(x=>x.id===p.id?{...x,address:e.target.value}:x));}}/></label></div><button className="participant-wallet-shortcut" disabled={locked||!!busy} onClick={()=>action('Assign connected wallet',async()=>{const address=await connect();setParticipants(current=>current.map(x=>x.id===p.id?{...x,address}:x));})}>Use wallet</button><button className="icon-button" aria-label={`Remove ${p.name}`} data-help={locked ? 'This plan is locked. Start a new draft to change participants.' : 'Remove this participant only if no obligation refers to them and at least two participants remain.'} disabled={locked||participants.length<=2||obligations.some(o=>o.from===p.id||o.to===p.id)} onClick={()=>{setParticipants(participants.filter(x=>x.id!==p.id));resetApprovals();}}><Trash2 size={16}/></button></div>)}</div><div className="modal-footer"><button className="button secondary" disabled={locked||participants.length>=10} onClick={()=>{setParticipants([...participants,{id:crypto.randomUUID(),name:`Participant ${participants.length+1}`,address:'',color:COLORS[participants.length]}]);resetApprovals();}}><Plus size={16}/>Add participant</button><button className="button primary" onClick={()=>{setModal(null);setError('');}}>Done</button></div></>}
-      {modal === 'settings' && <><p className="modal-description">Use a deployed ArcClear contract to create or load shared rooms.</p><label htmlFor="arc-network">Network<HelpTip text="Testnet uses test USDC; Mainnet uses real USDC. Contract addresses and room IDs depend on this selection."/><select id="arc-network" value={network} disabled={!!chainRoom||!!busy} onChange={e=>{const value=e.target.value as Network;setNetwork(value);setContract(value===appDefaults.network?appDefaults.contract:'');}}><option value="testnet">Arc Testnet · test USDC</option><option value="mainnet">Arc Mainnet · real USDC</option></select></label><label htmlFor="arc-contract">ArcClear contract address<HelpTip text="Enter the deployed ArcClear v2 address for this network, not a participant wallet address."/><input id="arc-contract" placeholder="0x…" value={contract} disabled={!!chainRoom||!!busy} onChange={e=>setContract(e.target.value.trim())}/></label>{!chainRoom && <label htmlFor="room-deadline">Room deadline<HelpTip text="Settlement must finish before this deadline. After expiry, funded payers can reclaim their own deposits."/><select id="room-deadline" value={deadlineDays} onChange={e=>setDeadlineDays(Number(e.target.value))}>{[1,3,7,14,30].map(d=><option key={d} value={d}>{d} {d===1?'day':'days'}</option>)}</select></label>}<div className="info-box"><ShieldCheck size={17}/><span>{network==='mainnet'?'Mainnet uses real USDC. Reserve extra USDC for gas.':'Testnet uses test USDC. Deploy here with your wallet, or enter an existing v2 contract.'}</span></div>{network === 'testnet' && !chainRoom && <button className="button secondary full" disabled={!!busy} onClick={()=>action('Deploy testnet contract',deployTestContract)}><Plus size={16}/>{busy || 'Deploy new testnet contract with wallet'}</button>}<label htmlFor="existing-room-id">Load an existing room<HelpTip text="Enter a positive room ID from the shared link or creation receipt, with the matching contract and network."/><input id="existing-room-id" inputMode="numeric" placeholder="Room ID, e.g. 1" value={roomInput} onChange={e=>setRoomInput(e.target.value.replace(/\D/g,''))}/></label><button className="button secondary full" disabled={!!busy||! /^[1-9]\d*$/.test(roomInput)||!isAddress(contract)} onClick={()=>action('Load room',async()=>{await refreshRoom(BigInt(roomInput));setModal(null);})}>{busy?<Loader2 className="spin" size={16}/>:<Download size={16}/>}Load room from Arc</button><div className="modal-footer"><a href="https://github.com/circlefin/skills/tree/master/plugins/circle/skills/use-arc" target="_blank" rel="noreferrer" className="text-link">Arc network reference<ExternalLink size={13}/></a><button className="button primary" disabled={!!busy} onClick={()=>{if(contract&&!isAddress(contract)){setError('Enter a valid contract address.');return;}setModal(null);setError('');}}>Save setup</button></div></>}
+      {modal === 'room' && <><p className="modal-description">This site uses {networks[network].name}. The deployment is managed by the site operator.</p><div className="info-box"><ShieldCheck size={17}/><span>Contract: {contract || 'Not configured'}</span></div>{!chainRoom && <label htmlFor="room-deadline">Room deadline<HelpTip text="Settlement must finish before this deadline. After expiry, funded payers can reclaim their own deposits."/><select id="room-deadline" value={deadlineDays} onChange={e=>setDeadlineDays(Number(e.target.value))}>{[1,3,7,14,30].map(d=><option key={d} value={d}>{d} {d===1?'day':'days'}</option>)}</select></label>}<label htmlFor="existing-room-id">Load an existing room<HelpTip text="Enter the room ID from a shared link or creation receipt for this site's deployment."/><input id="existing-room-id" inputMode="numeric" placeholder="Room ID, e.g. 1" value={roomInput} onChange={e=>setRoomInput(e.target.value.replace(/\D/g,''))}/></label><button className="button secondary full" disabled={!!busy||! /^[1-9]\d*$/.test(roomInput)||!isAddress(contract)} onClick={()=>action('Load room',async()=>{await refreshRoom(BigInt(roomInput));setModal(null);})}>{busy?<Loader2 className="spin" size={16}/>:<Download size={16}/>}Load room from Arc</button><div className="modal-footer"><button className="button primary" disabled={!!busy} onClick={()=>{setModal(null);setError('');}}>Done</button></div></>}
       {modal === 'help' && <><UserGuide/><button className="button primary full" onClick={()=>setModal(null)}>Got it</button></>}
     </section></div>}
     <TooltipLayer/>
