@@ -4,7 +4,7 @@ The browser calls a Node.js API. Only the API holds DATABASE_URL and connects to
 
 ## Configure locally
 
-1. Copy `config.env.example` to `.env.local`.
+1. Copy `config.env.example` to `.env` (or `.env.local`). The API reads both; `.env.local` overrides `.env`, and existing process variables override both.
 2. Set `DATABASE_URL` to your supplied Aiven connection URL. Keep the real URL only in this ignored file or the deployment provider's secret environment settings. Do not put it in a `VITE_` variable.
 3. Run `npm install` and `npm run dev`. This starts the API on port 8787 and the browser UI on port 5173. The API automatically creates the additive `arcclear` schema; it never drops existing tables. You can also run `npm run db:migrate` separately.
 4. The site displays **PostgreSQL connected** only after a successful database check. If the database is unavailable, wallet transactions remain available and workspace storage is disabled.
@@ -32,3 +32,7 @@ A static host alone can no longer provide workspace storage. It needs this API b
 The supplied Aiven host could not be resolved from the assistant's execution environment (`EAI_AGAIN`). No remote tables or saved records were verified or claimed. Run `npm run db:migrate` from a machine with database network access to verify the real connection. Error responses and logs omit the connection string and password.
 
 If connection fails, check Aiven service status, DNS, port access, IP allowlisting, and your server's environment. Do not paste credentials into diagnostics. Rotate the password shared in chat and update the server environment afterward.
+
+## Connection diagnostics
+
+The storage panel and `/api/health` show sanitized error codes without credentials. `EAI_AGAIN` or `ENOTFOUND` means the hostname cannot resolve; check DNS and the Aiven hostname from the machine running the API. `28P01` means credentials were rejected. `ECONNREFUSED` or `ETIMEDOUT` means service/network access needs checking. Run `npm run db:migrate` to check connectivity and schema setup. Restart after changing environment files. A static-only preview has no database API.
