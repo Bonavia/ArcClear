@@ -10,7 +10,7 @@ ArcClear is a netting interface with an Arc-native approval-based USDC settlemen
 
 ## Live settlement
 
-ArcClear now runs **Live on Arc only**. Start with an empty draft, assign participant wallets, and add agreed obligations. The testnet workflow can deploy the current contract through your browser wallet and prepare a small real-transaction test plan. Each participant signs their own approval; net payers fund their exact native-USDC balance before settlement.
+ArcClear now runs **Live on Arc only**. Start with an empty draft, assign participant wallets, and add agreed obligations. The testnet workflow uses the environment-configured contract and can prepare a small real-transaction test plan. Each participant signs their own approval; net payers fund their exact native-USDC balance before settlement.
 
 For example, obligations of 0.10, 0.09, and 0.08 USDC form a three-party cycle totaling 0.27 USDC. Only 0.02 USDC of net funding is needed; the two receivers get 0.01 USDC each. Gas is separate. This is a funding comparison, not profit or debt forgiveness. The graph shows logical routes; the contract pools deposits and pays receivers atomically.
 
@@ -42,11 +42,11 @@ For example, obligations of 0.10, 0.09, and 0.08 USDC form a three-party cycle t
 
 ## Test the real workflow
 
-The site always uses Live on Arc. Its guided workflow lets you connect to Arc Testnet, open Circle’s faucet, deploy ArcClear with your browser wallet, prepare a 0.02 USDC net-funding plan, and create, approve, fund, and settle a room. No private key is entered into the site. Approvals and funding refresh every five seconds.
+The site always uses Live on Arc. Its guided workflow lets you connect to Arc Testnet, open Circle’s faucet, use the configured ArcClear contract, prepare a 0.02 USDC net-funding plan, and create, approve, fund, and settle a room. No private key is entered into the site. Approvals and funding refresh every five seconds.
 
 The interface includes a state-aware next-step panel, tooltips for controls and fields, and a complete in-app User guide. Submitted transactions are distinguished from confirmed and reverted transactions.
 
-The Tools menu has no Arc settings entry. Network and contract configuration are available through **Contract setup** in the live workflow.
+The Tools menu has no Arc settings entry. Network and contract are controlled only by `.env` or `.env.local`. **Room options** lets users choose a deadline or load a room ID.
 
 ## PostgreSQL storage
 
@@ -56,7 +56,7 @@ Copy `config.env.example` to `.env.local` and privately set `DATABASE_URL`. The 
 
 ## Current status
 
-Build, calculator, wallet-provider deployment, local-EVM settlement, and SQL-emulated API checks pass. **No public Arc deployment or settlement is claimed.** Real testing needs funded wallets and wallet confirmations.
+Build, calculator, workflow guidance, local-EVM settlement, and SQL-emulated API checks pass. **No public Arc deployment or settlement is claimed.** Real testing needs funded wallets and wallet confirmations.
 
 The supplied Aiven connection could not be verified from this environment because hostname resolution failed. Database status remains unavailable until the server connects. Run `npm run db:migrate` from your machine to verify access. No remote database migration success is claimed.
 
@@ -111,7 +111,7 @@ The script writes the address and transaction hash to `deployments/testnet.json`
 
 1. Open **Participants** and assign unique wallet addresses.
 2. Add the obligations participants agree to clear.
-3. Open **Contract setup**, choose the network, and enter the deployed contract address.
+3. Set `VITE_ARC_NETWORK` and `VITE_ARCCLEAR_CONTRACT_ADDRESS` in `.env`, then restart development or rebuild production.
 4. Connect a participant wallet and create the room.
 5. Share the room link; each member loads and approves the exact plan using their own wallet.
 6. Net payers fund their net amount directly with native USDC; no token allowance is required. Reserve extra USDC for gas.
