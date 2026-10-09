@@ -51,7 +51,7 @@ export function UserGuide() {
     <p className="modal-description">Follow the current “Next step” on the room page. Hover or focus a control for its tooltip; tap the ? icons on touch screens.</p>
     <ol className="guide-checklist">
       <li><strong>Connect and choose your network.</strong><p>Use an Ethereum-compatible browser wallet. Start on Arc Testnet, open the faucet, and give every participant test USDC for gas. Mainnet spends real USDC.</p></li>
-      <li><strong>Set up the contract once.</strong><p>Deploy with your wallet on Testnet, or open Contract setup and paste an existing v2 address. Wait for the deployment confirmation before continuing.</p></li>
+      <li><strong>Check the configured deployment.</strong><p>The site already uses its configured Arc network and contract. Room options lets you choose a deadline or load an existing room ID.</p></li>
       <li><strong>Prepare and create the plan.</strong><p>Assign 2–10 unique wallets and add up to 64 obligations. From is the payer; To is the receiver. Use a positive amount with up to six decimals. The creator must be a participant. Review Original and Optimized, then create the immutable room.</p></li>
       <li><strong>Approve independently.</strong><p>Creation is not approval. Each member connects their own wallet and approves the complete plan. Share room copies the network, contract, and room ID. To test alone, switch among three different wallet accounts.</p></li>
       <li><strong>Fund only the difference.</strong><p>After every approval, each net payer deposits exactly their net balance as native USDC. Receivers deposit nothing. Reserve extra USDC for gas on every account.</p></li>
