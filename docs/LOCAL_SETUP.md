@@ -10,7 +10,18 @@ npm install
 
 If you already cloned the repository, run `git pull` inside it instead of cloning again.
 
-Copy `config.env.example` to `.env.local` and privately set DATABASE_URL to your PostgreSQL connection URL. Then start:
+Copy `config.env.example` to `.env.local` and privately set DATABASE_URL to your PostgreSQL connection URL. The network and contract are configured using public Vite variables:
+
+```dotenv
+VITE_ARC_NETWORK=testnet
+VITE_ARCCLEAR_CONTRACT_ADDRESS=0x8206202479c8f954c84126fe28289d148fd09393
+```
+
+These may be in `.env` or `.env.local`; `.env.local` overrides `.env`. Keep DATABASE_URL in the server's `.env.local`. Network/address values are public, so their VITE_ prefix is intentional. Use `mainnet` with a contract actually deployed on Mainnet; do not reuse the Testnet address by assumption.
+
+Restart `npm run dev` after edits, or rebuild production with `npm run build`. New drafts use these defaults. Existing saved rooms and shared links keep their own network and contract so their room IDs load correctly. Switching networks clears an unrelated contract address.
+
+Then start:
 
 ```sh
 npm run dev
