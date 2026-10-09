@@ -12,7 +12,7 @@ Connecting a wallet transfers no USDC. PostgreSQL sign-in uses a separate messag
 
 ## 2. Set up and review
 
-Deploy ArcClear v2 with your wallet on Testnet, or select an existing deployment using **Contract setup** in the workflow panel. This is separate from Tools. Choose the matching network, full contract address, and deadline.
+The site operator configures the network and ArcClear v2 address through the environment. **Configured deployment** shows the contract. **Room options** sets the deadline or loads an existing room ID. A shared or saved room must match this deployment.
 
 Assign 2–10 unique participant wallets. Add positive obligations with payer, receiver, amount, and reference. Amounts have at most six decimal places. Display names and references are local labels; the addresses and amounts control onchain behavior.
 
