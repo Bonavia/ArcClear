@@ -18,10 +18,10 @@ Open http://localhost:5173 in a browser with MetaMask or another Ethereum-compat
 
 1. Click **Connect to Arc** in the workflow panel. Approve connection and adding/switching to Arc Testnet in your wallet.
 2. Open **Get test USDC**. On Circle’s faucet, choose Arc Testnet and fund three distinct wallet accounts. Each account needs gas, even receivers. You can use three accounts in the same wallet for testing; in real collaboration each participant controls their own wallet.
-3. Click **Deploy with wallet** and confirm the testnet deployment transaction. Wait for confirmation. The site saves the confirmed contract address in this browser. If you already have a current v2 deployment, enter it in **Contract setup** instead.
+3. Confirm `.env` contains `VITE_ARC_NETWORK=testnet` and `VITE_ARCCLEAR_CONTRACT_ADDRESS=0x8206202479c8f954c84126fe28289d148fd09393`. Restart development after changing it. The frontend uses this deployment without an address selector or deployment button. Contract compatibility is checked when creating or loading rooms.
 4. Click **Use 0.02 USDC test plan**. Assign the three participants to the three wallet addresses. **Use wallet** assigns the wallet's currently selected account to that participant; select the appropriate account in your wallet before each assignment. Click **Done**.
 
-No seed phrase or private key is requested. The browser deployment button is testnet-only. Mainnet deployment remains an explicit separate operation.
+No seed phrase or private key is requested. Contract deployment remains an operator CLI operation.
 
 ## Create, approve, fund, settle
 
@@ -37,7 +37,7 @@ Approvals and funding refresh from the chain every five seconds. If updates fail
 
 ## Separate browsers or collaborators
 
-Click **Share room** after creation. A collaborator opens the link, connects their participant wallet, and clicks **Load room from Arc** in settings. Obligations, approvals, and funding come from the chain; display names are local labels.
+Click **Share room** after creation. A collaborator opens the link, connects their participant wallet, and clicks **Load room from Arc** in **Room options**. Obligations, approvals, and funding come from the chain; display names are local labels.
 
 A localhost link requires ArcClear running on each collaborator's computer at the same port. For general remote access, deploy the Node server behind HTTPS. Workspace storage requires the Node API and server-side PostgreSQL configuration; use a Node server behind HTTPS for remote access. GitHub changes do not update the old ChatGPT-hosted preview.
 
