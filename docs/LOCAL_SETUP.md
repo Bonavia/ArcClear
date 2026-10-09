@@ -17,7 +17,7 @@ VITE_ARC_NETWORK=testnet
 VITE_ARCCLEAR_CONTRACT_ADDRESS=0x8206202479c8f954c84126fe28289d148fd09393
 ```
 
-These may be in `.env` or `.env.local`; `.env.local` overrides `.env`. Keep DATABASE_URL in the server's `.env.local`. Network/address values are public, so their VITE_ prefix is intentional. Use `mainnet` with a contract actually deployed on Mainnet; do not reuse the Testnet address by assumption.
+These may be in `.env` or `.env.local`; `.env.local` overrides `.env`. The API loads DATABASE_URL from either file; existing process environment variables take precedence. Network/address values are public, so their VITE_ prefix is intentional. Use `mainnet` with a contract actually deployed on Mainnet; do not reuse the Testnet address by assumption.
 
 Restart `npm run dev` after edits, or rebuild production with `npm run build`. New drafts use these defaults. Existing saved rooms and shared links keep their own network and contract so their room IDs load correctly. Switching networks clears an unrelated contract address.
 
@@ -29,9 +29,9 @@ npm run dev
 
 The API runs on port 8787 and your browser opens at **http://localhost:5173**. Keep the terminal running; Ctrl+C stops both processes. Starting the app inside ChatGPT does not start a server on your laptop.
 
-ArcClear supports **Live on Arc only**. Connect your browser wallet, fund it with test USDC, deploy a contract through the live workflow, assign participant wallets, and create a room. Every member signs their own approval; net payers fund their net balance and a participant settles. See [the real workflow](REAL_WORKFLOW.md).
+ArcClear supports **Live on Arc only**. Connect your browser wallet, fund it with test USDC, use the configured contract, assign participant wallets, and create a room. Every member signs their own approval; net payers fund their net balance and a participant settles. See [the real workflow](REAL_WORKFLOW.md).
 
-The Tools menu no longer has Arc settings. **Contract setup** is available in the live workflow panel for network selection, contract configuration, and loading room IDs.
+The Tools menu no longer has Arc settings. Network and contract cannot be changed in the frontend. **Room options** controls deadlines and loads room IDs. Links or saved rooms from another deployment are rejected.
 
 Click **Save workspace** or **Load workspace** to use PostgreSQL after wallet sign-in. Local drafts remain available if the API/database is offline. See [database setup](DATABASE.md).
 
@@ -53,6 +53,6 @@ A localhost shared-room link requires ArcClear running at the same port on the c
 - **Node error:** use Node 24 or later.
 - **Port 5173 occupied:** stop the other process. Changing the UI origin also requires updating APP_ORIGIN.
 - **Wallet not found:** use the browser where your wallet extension is installed.
-- **PostgreSQL unavailable:** check `.env.local`, Aiven network access, and `npm run db:migrate`.
+- **PostgreSQL unavailable:** check `.env` and `.env.local`, the displayed health error, DNS, Aiven network access, and `npm run db:migrate`.
 - **Workspace conflict:** load the latest saved workspace before saving again.
 - **Private repository:** clone using an account with Bonavia/ArcClear access.
